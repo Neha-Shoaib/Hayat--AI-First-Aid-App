@@ -3,7 +3,6 @@ import Groq from "groq-sdk";
 
 export async function POST(req) {
   try {
-    // Initialize Groq
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     
     const formData = await req.formData();
@@ -14,7 +13,6 @@ export async function POST(req) {
     let finalPrompt = textQuery;
     const isUrdu = language === "Urdu";
 
-    // 1. Audio to Text using Groq Whisper
     if (audioFile && audioFile.size > 0) {
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
@@ -29,9 +27,19 @@ export async function POST(req) {
       return NextResponse.json({ error: "No input received" }, { status: 400 });
     }
 
-    // 2. Strict AI Prompt
+    // AI ab khud decide karega ke kon si video deni hai ya nahi deni
     const systemPrompt = `You are an emergency paramedic AI.
-CRITICAL INSTRUCTION: You MUST reply entirely in ${isUrdu ? "URDU (اردو) script ONLY. No English words." : "ENGLISH"}.
+CRITICAL INSTRUCTION: Reply entirely in ${isUrdu ? "URDU (اردو) script ONLY." : "ENGLISH"}.
+
+You have access to these YouTube video IDs for specific emergencies ONLY:
+- CPR/Cardiac Arrest: "5s23s8iXWdc"
+- Choking: "PA9hpOnvtCk"
+- Severe Bleeding/Cut: "NxO5LvgqZe0"
+- Burn/Fire: "O1bMcZOEnjs"
+- Electric Shock: "iVpG6B3X8Lw"
+- Unconscious but breathing (Recovery Position): "GmqXqwSV3bo"
+
+Select the MOST RELEVANT video ID based on the user's emergency. IF NO VIDEO is strictly relevant (e.g. stomach ache, minor scratch, headache, panic attack), set "videoId" to null. DO NOT suggest the recovery position unless the person is unconscious.
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -39,11 +47,12 @@ Return ONLY valid JSON matching this exact structure:
   "title": "${isUrdu ? "Title in Urdu" : "Title in English"}",
   "dos": ["${isUrdu ? "Action 1 in Urdu" : "Action 1 in English"}", "${isUrdu ? "Action 2 in Urdu" : "Action 2"}"],
   "donts": ["${isUrdu ? "Warning in Urdu" : "Warning in English"}"],
-  "spokenSummary": "${isUrdu ? "A 1-sentence urgent action in pure Urdu" : "A 1-sentence urgent action in English"}"
+  "spokenSummary": "${isUrdu ? "A 1-sentence urgent action in pure Urdu" : "A 1-sentence urgent action in English"}",
+  "videoId": "Selected video ID or null",
+  "videoTitle": "${isUrdu ? "Video title in Urdu" : "Video title in English"}"
 }
 No other text. Only JSON.`;
 
-    // 3. AI Text Generation using Groq Llama 3.3
     const chatCompletion = await groq.chat.completions.create({
       model: "openai/gpt-oss-120b",
       messages: [
