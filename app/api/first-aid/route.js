@@ -11,36 +11,41 @@ export async function POST(req) {
 
     let finalPrompt = textQuery;
 
-    // Agar user ne voice message bheja hai toh Whisper se transcribe karein
+    // Whisper Speech-to-Text with explicit multilingual decoding
     if (audioFile && audioFile.size > 0) {
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
         model: "whisper-large-v3",
         response_format: "text",
+        language: language === "Urdu" ? "ur" : "en",
+        temperature: 0.0,
       });
       finalPrompt = transcription;
     }
 
     if (!finalPrompt || finalPrompt.trim() === "") {
-      return NextResponse.json({ error: "No input provided" }, { status: 400 });
+      return NextResponse.json({ error: "No input received" }, { status: 400 });
     }
 
-    const isUrdu = language.toLowerCase().includes("urdu");
+    const isUrdu = language === "Urdu";
 
-    const systemPrompt = isUrdu
-      ? `Aap aik Emergency First Aid AI assistant hain. User intehai panic ya emergency mein hai.
-Strict Qawaid:
-1. Jawab aasan aur fori fehm Urdu (Roman Urdu aur aam Urdu) mein ho.
-2. Bilkul seedhe sirf 3-4 bullet points likhein jo foran karne hain (DOs).
-3. 1 sakht warning likhein jo bilkul NAHI karni (DON'T).
-4. Koi lambi explanation ya doctori jargon nahi.
-5. Akhir mein bolen: "Ambulance aane tak mareez ke sath rahein."`
-      : `You are an Emergency First Aid AI Assistant. The user is in an urgent emergency.
+    // Structured JSON response taake UI mein badges aur structured cards ban sakein
+    const systemPrompt = `You are Hayat AI, a crisis-grade paramedic first aid dispatch assistant.
+Target Language: ${isUrdu ? "Urdu (Simple, conversational, natural Urdu script & words understood everywhere)" : "English"}.
+
+You MUST return your answer in valid JSON format ONLY with this exact JSON structure:
+{
+  "severity": "CRITICAL" | "MODERATE" | "STABLE",
+  "title": "Short title of injury/crisis",
+  "dos": ["Immediate action 1", "Immediate action 2", "Immediate action 3"],
+  "donts": ["Crucial mistake to strictly avoid"],
+  "spokenSummary": "A concise 2-sentence conversational instruction written in ${isUrdu ? "Urdu" : "English"} that can be read aloud by Text-to-Speech immediately to save a life without reading bullets."
+}
+
 Rules:
-1. Provide strictly 3-4 bullet points of immediate life-saving actions (DOs).
-2. Provide 1 strict warning of what NOT to do (DON'T).
-3. No medical jargon. Keep it ultra-concise and clear.
-4. End with: "Stay with the patient until ambulance arrives."`;
+- No markdown wrappers outside the JSON.
+- Never suggest hospital-only procedures.
+- Keep steps direct, physical, and actionable within 10 seconds.`;
 
     const chatCompletion = await groq.chat.completions.create({
       model: "openai/gpt-oss-120b",
@@ -48,19 +53,20 @@ Rules:
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
       ],
+      response_format: { type: "json_object" },
       temperature: 0.1,
     });
 
-    const advice = chatCompletion.choices[0]?.message?.content || "";
+    const parsedData = JSON.parse(chatCompletion.choices[0]?.message?.content || "{}");
 
     return NextResponse.json({
       transcription: finalPrompt,
-      advice: advice,
+      data: parsedData,
     });
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("API Route Error:", error);
     return NextResponse.json(
-      { error: "Emergency service error. Please call 1122 immediately." },
+      { error: "First Aid API dispatch failed. Dial 1122 immediately." },
       { status: 500 }
     );
   }
