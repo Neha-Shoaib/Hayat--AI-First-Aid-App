@@ -43,7 +43,7 @@ Rules:
 4. End with: "Stay with the patient until ambulance arrives."`;
 
     const chatCompletion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
