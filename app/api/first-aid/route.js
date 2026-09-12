@@ -3,7 +3,14 @@ import OpenAI from "openai";
 
 export async function POST(req) {
   try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // OpenAI client initialization
+    const openai = new OpenAI({ 
+      apiKey: process.env.OPENAI_API_KEY 
+      // Agar aap OpenRouter ya koi aur custom API use kar rahi hain jiska model gpt-oss-120b hai, 
+      // toh aapko yahan baseURL dena hoga. For example:
+      // baseURL: "https://openrouter.ai/api/v1",
+    });
+
     const formData = await req.formData();
     const language = formData.get("language") || "Urdu";
     const textQuery = formData.get("textQuery") || "";
@@ -40,7 +47,7 @@ Return ONLY valid JSON matching this exact structure:
 No other text.`;
 
     const chatCompletion = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b",
+      model: "gpt-4o-mini", // Hackathon ke liye fast aur standard model
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
@@ -54,6 +61,7 @@ No other text.`;
     return NextResponse.json({ transcription: finalPrompt, data: parsedData });
   } catch (error) {
     console.error("API Route Error:", error);
-    return NextResponse.json({ error: "Error processing request. Call 1122." }, { status: 500 });
+    // Ab yeh exact error message frontend par bheje ga taake alert mein wajah samajh aa jaye
+    return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
   }
 }
