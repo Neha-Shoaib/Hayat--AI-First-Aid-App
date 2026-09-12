@@ -11,7 +11,6 @@ export async function POST(req) {
 
     let finalPrompt = textQuery;
 
-    // Whisper Speech-to-Text with explicit multilingual decoding
     if (audioFile && audioFile.size > 0) {
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
@@ -29,26 +28,23 @@ export async function POST(req) {
 
     const isUrdu = language === "Urdu";
 
-    // Structured JSON response taake UI mein badges aur structured cards ban sakein
-    const systemPrompt = `You are Hayat AI, a crisis-grade paramedic first aid dispatch assistant.
-Target Language: ${isUrdu ? "Urdu (Simple, conversational, natural Urdu script & words understood everywhere)" : "English"}.
+    // EXTREMELY STRICT LANGUAGE PROMPT
+    const systemPrompt = `You are an emergency paramedic AI.
+CRITICAL INSTRUCTION: You MUST reply entirely in ${isUrdu ? "URDU (اردو) script ONLY. Do not use English words." : "ENGLISH"}.
 
-You MUST return your answer in valid JSON format ONLY with this exact JSON structure:
+Return ONLY valid JSON matching this exact structure:
 {
   "severity": "CRITICAL" | "MODERATE" | "STABLE",
-  "title": "Short title of injury/crisis",
-  "dos": ["Immediate action 1", "Immediate action 2", "Immediate action 3"],
-  "donts": ["Crucial mistake to strictly avoid"],
-  "spokenSummary": "A concise 2-sentence conversational instruction written in ${isUrdu ? "Urdu" : "English"} that can be read aloud by Text-to-Speech immediately to save a life without reading bullets."
+  "title": "${isUrdu ? "Write title in Urdu" : "Write title in English"}",
+  "dos": ["${isUrdu ? "Action 1 in Urdu" : "Action 1 in English"}", "${isUrdu ? "Action 2 in Urdu" : "Action 2"}"],
+  "donts": ["${isUrdu ? "Warning in Urdu" : "Warning in English"}"],
+  "spokenSummary": "${isUrdu ? "A very short 1-sentence urgent action in pure Urdu (under 150 characters)" : "A short 1-sentence urgent action in English (under 150 characters)"}"
 }
 
-Rules:
-- No markdown wrappers outside the JSON.
-- Never suggest hospital-only procedures.
-- Keep steps direct, physical, and actionable within 10 seconds.`;
+No other text. Only the JSON object.`;
 
     const chatCompletion = await groq.chat.completions.create({
-      model: "openai/gpt-oss-120b",
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
@@ -66,7 +62,7 @@ Rules:
   } catch (error) {
     console.error("API Route Error:", error);
     return NextResponse.json(
-      { error: "First Aid API dispatch failed. Dial 1122 immediately." },
+      { error: "Error processing request. Call 1122." },
       { status: 500 }
     );
   }
