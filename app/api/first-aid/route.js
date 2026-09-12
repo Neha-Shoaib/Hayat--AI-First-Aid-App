@@ -40,7 +40,7 @@ Return ONLY valid JSON matching this exact structure:
 No other text.`;
 
     const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-oss-120b",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
