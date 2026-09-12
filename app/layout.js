@@ -1,6 +1,12 @@
+import Script from 'next/script';
+
 export const metadata = {
   title: "HAYAT AI - Emergency",
   description: "Emergency First Aid Assistant",
+  // Yeh line favicon ka 404 error hamesha ke liye khatam kar degi
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚑</text></svg>",
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -8,7 +14,6 @@ export default function RootLayout({ children }) {
     <html lang="ur" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
         <style>{`
           .font-urdu { font-family: 'Noto Nastaliq Urdu', serif; direction: rtl; }
@@ -16,6 +21,8 @@ export default function RootLayout({ children }) {
         `}</style>
       </head>
       <body className="antialiased font-inter m-0 p-0 overflow-x-hidden" suppressHydrationWarning>
+        {/* Next.js ka smart script loader jo app ko crash nahi hone dega */}
+        <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
         {children}
       </body>
     </html>
