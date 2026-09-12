@@ -17,6 +17,7 @@ export default function HayatMasterApp() {
   const cprIntervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const audioRef = useRef(null); // Audio ko track karne ke liye ref
 
   const [location, setLocation] = useState({ lat: "Fetching...", lng: "" });
   const [locLoading, setLocLoading] = useState(false);
@@ -24,6 +25,13 @@ export default function HayatMasterApp() {
   useEffect(() => {
     setMounted(true);
     fetchLocation();
+    
+    // Cleanup audio on unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
   }, []);
 
   const fetchLocation = () => {
@@ -42,40 +50,39 @@ export default function HayatMasterApp() {
     }
   };
 
-  // FIXED: Audio Interrupted Bug Fix with Timeout
+  // 100% BULLETPROOF AUDIO FIX (Google Cloud GTX API)
   const playAudio = (text) => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      // Agar already play ho raha hai aur button dabaya jaye toh sirf stop karein
-      if (isPlayingAudio) {
-        window.speechSynthesis.cancel();
-        setIsPlayingAudio(false);
-        return;
-      }
-
-      // Pehle puraana buffer clear karein
-      window.speechSynthesis.cancel();
-
-      // 50ms ka delay taake browser "interrupted" error na de
-      setTimeout(() => {
-        setIsPlayingAudio(true);
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang === "Urdu" ? "ur-PK" : "en-US";
-        utterance.rate = 0.85; 
-        
-        utterance.onend = () => setIsPlayingAudio(false);
-        utterance.onerror = (e) => {
-            // "interrupted" error tab bhi aa sakta hai jab hum khud cancel karein, usko ignore karein
-            if (e.error !== 'interrupted') {
-                console.error("Audio error:", e);
-                setIsPlayingAudio(false);
-            }
-        };
-        
-        window.speechSynthesis.speak(utterance);
-      }, 50);
-    } else {
-      alert("Aapka browser audio support nahi karta.");
+    // Agar pehle se play ho raha hai, toh rokein
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
+    
+    if (isPlayingAudio) {
+      setIsPlayingAudio(false);
+      return;
+    }
+
+    setIsPlayingAudio(true);
+    const langCode = lang === "Urdu" ? "ur" : "en";
+    
+    // Google TTS limit is 200 chars, so we safely slice it
+    const safeText = encodeURIComponent(text.substring(0, 199));
+    const audioUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${langCode}&q=${safeText}`;
+
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    audio.onended = () => setIsPlayingAudio(false);
+    audio.onerror = () => {
+      setIsPlayingAudio(false);
+      alert("Audio network error. Internet check karein.");
+    };
+
+    audio.play().catch((err) => {
+      console.error("Audio block error:", err);
+      setIsPlayingAudio(false);
+      alert("Browser ne audio block kar di hai. Please button dobara dabayein.");
+    });
   };
 
   const startRecording = async () => {
@@ -109,7 +116,8 @@ export default function HayatMasterApp() {
 
   const submitEmergency = async (audioBlob, manualText) => {
     setLoading(true); setResult(null); setTranscription("");
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    
+    if (audioRef.current) audioRef.current.pause();
     setIsPlayingAudio(false);
 
     try {
@@ -151,7 +159,7 @@ export default function HayatMasterApp() {
     }
   };
 
-  if (!mounted) return <div className="min-h-screen bg-slate-950 flex items-center justify-center font-bold text-white">Loading...</div>;
+  if (!mounted) return <main className="min-h-screen bg-slate-950 text-slate-100"></main>;
   const isDark = theme === "dark";
 
   const ui = lang === "Urdu" ? {
@@ -204,10 +212,8 @@ export default function HayatMasterApp() {
 
   return (
     <main className={`min-h-screen w-full transition-colors duration-200 overflow-x-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"} ${lang === "Urdu" ? "font-urdu" : "font-inter"}`}>
-      {/* Responsive Container: Added dynamic padding for mobile vs desktop */}
       <div className="w-full max-w-2xl mx-auto px-3 sm:px-6 py-4 flex flex-col gap-4">
         
-        {/* Header */}
         <header className="flex flex-wrap items-center justify-between border-b border-slate-700/30 pb-3 gap-3 font-inter">
           <div className="flex items-center gap-2 font-black uppercase text-emerald-500 text-sm sm:text-base">
             <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
@@ -224,7 +230,6 @@ export default function HayatMasterApp() {
           </div>
         </header>
 
-        {/* 1122 & GPS Grid: Mobile pe upar neeche, badi screen pe side-by-side */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-inter">
           <a href="tel:1122" className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl flex items-center justify-center gap-2 font-black text-sm sm:text-base shadow-lg">
             <PhoneCall className="h-5 w-5 animate-bounce" /> {ui.callBtn}
@@ -250,7 +255,6 @@ export default function HayatMasterApp() {
           </div>
         </section>
 
-        {/* Input Area */}
         <section className={`p-5 sm:p-8 rounded-2xl border text-center flex flex-col items-center gap-4 ${isDark ? "bg-slate-900/40 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           {isRecording ? (
             <div className="flex flex-col items-center gap-3 w-full">
@@ -276,7 +280,6 @@ export default function HayatMasterApp() {
 
         {loading && <div className="text-center text-red-500 font-bold flex justify-center items-center gap-2 animate-pulse text-sm sm:text-base py-2"><Sparkles className="h-5 w-5 animate-spin" /> {ui.processing}</div>}
 
-        {/* Output Section */}
         {result && (
           <section className={`rounded-2xl border p-4 sm:p-6 flex flex-col gap-5 shadow-lg ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
             <div className={`flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border-b border-slate-700/20 pb-4 ${lang === "Urdu" ? "sm:flex-row-reverse" : ""}`}>
@@ -306,7 +309,6 @@ export default function HayatMasterApp() {
               ))}
             </div>
 
-            {/* AI DECIDED VIDEO RENDER */}
             {result.videoId && (
               <a href={`https://www.youtube.com/watch?v=${result.videoId}`} target="_blank" rel="noopener noreferrer" className={`mt-2 w-full bg-[#FF0000] hover:bg-red-700 text-white p-3.5 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md transition ${lang === "Urdu" ? "flex-row-reverse font-inter text-sm sm:text-base" : "text-sm sm:text-base"}`}>
                 <Youtube className="h-6 w-6" /> <span className="truncate">{ui.watchVideo}: {result.videoTitle}</span> <ExternalLink className="h-4 w-4 opacity-70 flex-shrink-0" />
