@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 
 export async function POST(req) {
   try {
-    // OpenAI client initialization
-    const openai = new OpenAI({ 
-      apiKey: process.env.OPENAI_API_KEY 
-      // Agar aap OpenRouter ya koi aur custom API use kar rahi hain jiska model gpt-oss-120b hai, 
-      // toh aapko yahan baseURL dena hoga. For example:
-      // baseURL: "https://openrouter.ai/api/v1",
-    });
-
+    // Initialize Groq
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    
     const formData = await req.formData();
     const language = formData.get("language") || "Urdu";
     const textQuery = formData.get("textQuery") || "";
@@ -19,20 +14,22 @@ export async function POST(req) {
     let finalPrompt = textQuery;
     const isUrdu = language === "Urdu";
 
-    // OpenAI Whisper for Transcription
+    // 1. Audio to Text using Groq Whisper
     if (audioFile && audioFile.size > 0) {
-      const transcription = await openai.audio.transcriptions.create({
+      const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
-        model: "whisper-1",
+        model: "whisper-large-v3",
+        response_format: "text",
         language: isUrdu ? "ur" : "en",
       });
-      finalPrompt = transcription.text;
+      finalPrompt = transcription;
     }
 
     if (!finalPrompt || finalPrompt.trim() === "") {
       return NextResponse.json({ error: "No input received" }, { status: 400 });
     }
 
+    // 2. Strict AI Prompt
     const systemPrompt = `You are an emergency paramedic AI.
 CRITICAL INSTRUCTION: You MUST reply entirely in ${isUrdu ? "URDU (اردو) script ONLY. No English words." : "ENGLISH"}.
 
@@ -44,10 +41,11 @@ Return ONLY valid JSON matching this exact structure:
   "donts": ["${isUrdu ? "Warning in Urdu" : "Warning in English"}"],
   "spokenSummary": "${isUrdu ? "A 1-sentence urgent action in pure Urdu" : "A 1-sentence urgent action in English"}"
 }
-No other text.`;
+No other text. Only JSON.`;
 
-    const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Hackathon ke liye fast aur standard model
+    // 3. AI Text Generation using Groq Llama 3.3
+    const chatCompletion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
@@ -61,7 +59,6 @@ No other text.`;
     return NextResponse.json({ transcription: finalPrompt, data: parsedData });
   } catch (error) {
     console.error("API Route Error:", error);
-    // Ab yeh exact error message frontend par bheje ga taake alert mein wajah samajh aa jaye
     return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
   }
 }
