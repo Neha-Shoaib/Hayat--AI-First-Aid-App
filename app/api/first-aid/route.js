@@ -44,7 +44,7 @@ Return ONLY valid JSON matching this exact structure:
 No other text. Only the JSON object.`;
 
     const chatCompletion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: finalPrompt },
