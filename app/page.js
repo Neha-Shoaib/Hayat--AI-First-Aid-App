@@ -2,16 +2,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Mic, Square, PhoneCall, Volume2, VolumeX, AlertOctagon, CheckCircle2, XCircle, MapPin, HeartPulse, Sun, Moon, Sparkles, Send, Youtube, ExternalLink, RefreshCw } from "lucide-react";
 
-// Urdu/Hindi Medical Video References (Always Urdu as requested)
-const VIDEO_REGISTRY = {
-  cpr: { title: "سی پی آر کرنے کا طریقہ", id: "5s23s8iXWdc" }, 
-  choking: { title: "گلے میں کچھ پھنس جائے تو کیا کریں", id: "PA9hpOnvtCk" },
-  bleeding: { title: "خون روکنے کا طریقہ", id: "NxO5LvgqZe0" },
-  burn: { title: "جلنے کا فوری علاج", id: "O1bMcZOEnjs" },
-  shock: { title: "کرنٹ لگنے پر فرسٹ ایڈ", id: "iVpG6B3X8Lw" },
-  default: { title: "مریض کو لٹانے کا محفوظ طریقہ", id: "GmqXqwSV3bo" },
-};
-
 export default function HayatMasterApp() {
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState("dark");
@@ -21,10 +11,8 @@ export default function HayatMasterApp() {
   const [loading, setLoading] = useState(false);
   const [transcription, setTranscription] = useState("");
   const [result, setResult] = useState(null);
-  const [videoInfo, setVideoInfo] = useState(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   
-  const audioRef = useRef(null);
   const [cprActive, setCprActive] = useState(false);
   const cprIntervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -54,19 +42,31 @@ export default function HayatMasterApp() {
     }
   };
 
+  // Robust Native TTS Engine
   const playAudio = (text) => {
-    if (audioRef.current) audioRef.current.pause();
-    if (isPlayingAudio) { setIsPlayingAudio(false); return; }
-    
-    const langCode = lang === "Urdu" ? "ur" : "en";
-    const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-    
-    audio.onplay = () => setIsPlayingAudio(true);
-    audio.onended = () => setIsPlayingAudio(false);
-    audio.onerror = () => setIsPlayingAudio(false);
-    audio.play();
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      
+      if (isPlayingAudio) {
+        setIsPlayingAudio(false);
+        return;
+      }
+
+      setIsPlayingAudio(true);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === "Urdu" ? "ur-PK" : "en-US";
+      utterance.rate = 0.85; // Thoda slow taake saaf samajh aaye
+      
+      utterance.onend = () => setIsPlayingAudio(false);
+      utterance.onerror = (e) => {
+          console.error("Audio error", e);
+          setIsPlayingAudio(false);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert("Aapka browser audio support nahi karta.");
+    }
   };
 
   const startRecording = async () => {
@@ -87,7 +87,7 @@ export default function HayatMasterApp() {
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch {
-      alert("Mic permission error.");
+      alert("Mic permission allow karein.");
     }
   };
 
@@ -98,19 +98,9 @@ export default function HayatMasterApp() {
     }
   };
 
-  const matchVideo = (query) => {
-    const q = query.toLowerCase();
-    if (q.includes("cpr") || q.includes("heart") || q.includes("dil") || q.includes("cardiac")) return VIDEO_REGISTRY.cpr;
-    if (q.includes("chok") || q.includes("saans") || q.includes("gala") || q.includes("phans")) return VIDEO_REGISTRY.choking;
-    if (q.includes("bleed") || q.includes("khoon") || q.includes("cut")) return VIDEO_REGISTRY.bleeding;
-    if (q.includes("burn") || q.includes("jala") || q.includes("aag")) return VIDEO_REGISTRY.burn;
-    if (q.includes("shock") || q.includes("bijli") || q.includes("current")) return VIDEO_REGISTRY.shock;
-    return VIDEO_REGISTRY.default;
-  };
-
   const submitEmergency = async (audioBlob, manualText) => {
-    setLoading(true); setResult(null); setVideoInfo(null); setTranscription("");
-    if (audioRef.current) audioRef.current.pause();
+    setLoading(true); setResult(null); setTranscription("");
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setIsPlayingAudio(false);
 
     try {
@@ -125,9 +115,6 @@ export default function HayatMasterApp() {
 
       setTranscription(resData.transcription);
       setResult(resData.data);
-      setVideoInfo(matchVideo(resData.transcription || manualText || ""));
-      
-      if (resData.data?.spokenSummary) setTimeout(() => playAudio(resData.data.spokenSummary), 500);
     } catch (err) {
       alert(err.message || "Connection Error.");
     } finally {
@@ -158,7 +145,6 @@ export default function HayatMasterApp() {
   if (!mounted) return <div className="min-h-screen bg-slate-950 flex items-center justify-center font-bold text-white">Loading...</div>;
   const isDark = theme === "dark";
 
-  // Full UI Localization Dictionary
   const ui = lang === "Urdu" ? {
     callBtn: "1122 پر کال کریں",
     locating: "لوکیشن تلاش...",
@@ -181,7 +167,7 @@ export default function HayatMasterApp() {
     donts: "یہ ہرگز نہ کریں:",
     listen: "سنیں (Audio)",
     stopAudio: "آواز روکیں",
-    watchVideo: "یوٹیوب پر ویڈیو دیکھیں"
+    watchVideo: "ویڈیو دیکھیں"
   } : {
     callBtn: "CALL 1122",
     locating: "Locating...",
@@ -204,7 +190,7 @@ export default function HayatMasterApp() {
     donts: "Strict Warnings (Do Not):",
     listen: "Listen (Audio)",
     stopAudio: "Stop Audio",
-    watchVideo: "Watch Video Guide"
+    watchVideo: "Watch Video"
   };
 
   return (
@@ -306,9 +292,10 @@ export default function HayatMasterApp() {
               ))}
             </div>
 
-            {videoInfo && (
-              <a href={`https://www.youtube.com/watch?v=${videoInfo.id}`} target="_blank" rel="noopener noreferrer" className={`mt-2 w-full bg-[#FF0000] hover:bg-red-700 text-white p-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md transition ${lang === "Urdu" ? "flex-row-reverse font-inter text-sm" : ""}`}>
-                <Youtube className="h-5 w-5" /> {ui.watchVideo} ({videoInfo.title}) <ExternalLink className="h-4 w-4 opacity-70" />
+            {/* AI DECIDED VIDEO RENDER */}
+            {result.videoId && (
+              <a href={`https://www.youtube.com/watch?v=${result.videoId}`} target="_blank" rel="noopener noreferrer" className={`mt-2 w-full bg-[#FF0000] hover:bg-red-700 text-white p-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md transition ${lang === "Urdu" ? "flex-row-reverse font-inter text-sm" : ""}`}>
+                <Youtube className="h-5 w-5" /> {ui.watchVideo}: {result.videoTitle} <ExternalLink className="h-4 w-4 opacity-70" />
               </a>
             )}
           </section>
